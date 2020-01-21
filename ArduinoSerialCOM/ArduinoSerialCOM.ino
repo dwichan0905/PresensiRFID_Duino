@@ -1,6 +1,8 @@
 #include <ArduinoJson.h>
 #include <LiquidCrystal.h>
-
+#include <SPI.h>
+#include <MFRC522.h>
+ 
 #define RS 2
 #define ENABLE 3
 #define DATA4 4
@@ -8,11 +10,14 @@
 #define DATA6 6
 #define DATA7 7
 #define SPEAKER 8
+#define SS_PIN 10
+#define RST_PIN 9
 
 int DEVICEID = 123;
 int state = 0; // 0: Checking, 1: Register, 2: Not Register
 
 LiquidCrystal LCD(RS, ENABLE, DATA4, DATA5, DATA6, DATA7);
+MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
 
 StaticJsonBuffer<200> jsonBuffer;
 
@@ -28,6 +33,8 @@ void setup() {
   LCD.setCursor (0, 0);
   LCD.print("Booting...");
   Serial.begin(9600);
+  SPI.begin();      // Initiate  SPI bus
+  mfrc522.PCD_Init();   // Initiate MFRC522
   pinMode(SPEAKER, OUTPUT);
   beep(50);
   LCD.clear();
@@ -50,9 +57,10 @@ void loop() {
         LCD.print("Checking Device      ");
         LCD.setCursor(0, 1);
         LCD.print("                ");
-        Serial.print(DEVICEID);
+        Serial.print("DEVID=" + DEVICEID);
         LCD.setCursor(0, 0);
         String json = Serial.readString(); 
+        delay(100);
             
         if(json.length() != 0) {
           JsonObject& root = jsonBuffer.parseObject(json);
@@ -79,24 +87,48 @@ void loop() {
         }   
       } else if (state == 1) {
         LCD.setCursor(0, 0);
-        LCD.print("COM RESPONSE:        ");
+        LCD.print("Tempelkan Kartu      ");
         LCD.setCursor(0, 1);
-        LCD.print("                     ");
-        String res;
-    
-        res = Serial.readString(); 
-        if (res != "") {
-          beep(50);
-          beep(50);
-          LCD.setCursor(0, 1);
-          LCD.print(res);
+        LCD.print("Mahasiswa Anda...    ");
+        // Look for new cards
+        if ( ! mfrc522.PICC_IsNewCardPresent()) 
+        {
+          return;
+        }
+        // Select one of the cards
+        if ( ! mfrc522.PICC_ReadCardSerial()) 
+        {
+          return;
+        }
+        //Show UID on serial monitor
+        Serial.print("UID tag :");
+        String content= "";
+        byte letter;
+        for (byte i = 0; i < mfrc522.uid.size; i++) 
+        {
+           content.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " "));
+           content.concat(String(mfrc522.uid.uidByte[i], HEX));
+        }
+        Serial.println("UID=" + content);
+        Serial.print("Message : ");
+        content.toUpperCase();
+        if (content.substring(1) == "BD 31 15 2B") //change here the UID of the card/cards that you want to give access
+        {
+          Serial.println("Authorized access");
+          Serial.println();
+          delay(3000);
+        }
+       
+       else   {
+          Serial.println(" Access denied");
           delay(3000);
         }
       } else {
         LCD.setCursor(0, 0);
         LCD.print("DEVICE NO REG       ");
         LCD.setCursor(0, 1);
-        LCD.print("DEVID: 123          ");
+        LCD.print("DEVID=");
+        LCD.print(DEVICEID);
         while(1) {}
       }
        
