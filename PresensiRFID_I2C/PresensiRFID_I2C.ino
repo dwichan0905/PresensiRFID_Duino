@@ -1,16 +1,10 @@
 // Include Library yang dibutuhkan
 #include <ArduinoJson.h>
-#include <LiquidCrystal.h>
+#include <LiquidCrystal_I2C.h>
 #include <SPI.h>
 #include <MFRC522.h>
 
 // Penentuan Port Arduino
-#define RS 2
-#define ENABLE 3
-#define DATA4 4
-#define DATA5 5
-#define DATA6 6
-#define DATA7 7
 #define SPEAKER 8
 #define SS_PIN 10
 #define RST_PIN 9
@@ -22,9 +16,11 @@ int DEVICEID = 123;
 int state = 0; // 0: Checking, 1: Register, 2: Not Register, 3: Find and Get Result
 
 // Load Instances
-LiquidCrystal LCD(RS, ENABLE, DATA4, DATA5, DATA6, DATA7);
+LiquidCrystal_I2C LCD(0x27, 16, 2); // 0x27: Cari alamat I2C nya dulu
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 StaticJsonBuffer<500> jsonBuffer;
+
+String lastUID = "";
 
 // cuma buat bunyi bunyi manja aja wkwkkw
 void beep(int del) {
@@ -54,7 +50,7 @@ String getValue(String data, char separator, int index)
 // Perintah yg akan dijalankan pertama
 void setup() {
   // put your setup code here, to run once:
-  LCD.begin(16, 2);
+  LCD.begin();
   LCD.setCursor (0, 0);
   // Proses memulai semua library dan PIN
   LCD.print("Booting...");
@@ -143,8 +139,8 @@ void loop() {
       LCD.print("Mahasiswa Anda...    ");
       
       // 2 baris di bawah cuma buat mode debugging aja, komentarin aja kalo kalian kesel :v
-      delay(10000);
-      state = 3;
+      //delay(10000);
+      //state = 3;
       
       // Look for new cards
       if ( ! mfrc522.PICC_IsNewCardPresent()) 
@@ -166,23 +162,13 @@ void loop() {
          content.concat(String(mfrc522.uid.uidByte[i], HEX));
       }
       content.toUpperCase();
+      lastUID = content.substring(1);
       Serial.print("UID=");
-      Serial.print(content);
+      Serial.print(content.substring(1));
       Serial.print(";DEVID=");
       Serial.print(DEVICEID);
       state = 3; // Ubah keadaan
-      
-//      Serial.print("Message : ");
-//      content.toUpperCase();
-//      if (content.substring(1) == "BD 31 15 2B") //change here the UID of the card/cards that you want to give access
-//      {
-//        Serial.println("Authorized access");
-//        Serial.println();
-//        delay(3000);
-//      } else {
-//        Serial.println(" Access denied");
-//        delay(3000);
-//      }
+     
 
     } else if (state == 2) {
       // Kamu siapa?
@@ -200,8 +186,13 @@ void loop() {
       LCD.print("                ");
       
       // 2 baris di bawah cuma buat mode debugging aja, komentarin aja kalo kalian kesel :v
-      Serial.print("UID=121 229 158 132;DEVID=");
-      Serial.print(DEVICEID);    
+      //Serial.print("UID=121 229 158 132;DEVID=");
+      //Serial.print(DEVICEID); 
+
+      Serial.print("UID=");
+      Serial.print(lastUID);
+      Serial.print(";DEVID=");
+      Serial.print(DEVICEID);
       
       jsonBuffer.clear();   // bebersih bapernya *eh buffer :v 
       String json = Serial.readString(); 
@@ -226,7 +217,7 @@ void loop() {
             delay(3000);
             state = 1;
             jsonBuffer.clear();
-            
+            lastUID = "";
           } else if (code == 1) {
             // kalo modenya tambah kartu, tapi udah ada
             String uid = root["result"];
@@ -246,7 +237,7 @@ void loop() {
             delay(10000);
             state = 1;
             jsonBuffer.clear();
-            
+            lastUID = "";
           } else if (code == 2) {
             // kalo masuk mode tambah, dan berhasil ditambah ke web
             String uid = root["result"];
@@ -266,7 +257,7 @@ void loop() {
             delay(10000);
             state = 1;
             jsonBuffer.clear();
-            
+            lastUID = "";
           } else if (code == 404) {
             // dah lah males
             LCD.setCursor(0, 0);
@@ -278,6 +269,8 @@ void loop() {
             beep(500);
             //LCD.print(code);
             delay(3000);
+            lastUID = "";
+            state = 1;
           }
        } 
     }
